@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KeyLens — NLP Keyword Research</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #07080d;
+      --surface:  #0f1118;
+      --border:   #1e2130;
+      --accent:   #5b6af5;
+      --accent2:  #a78bfa;
+      --green:    #34d399;
+      --yellow:   #fbbf24;
+      --pink:     #f472b6;
+      --red:      #f87171;
+      --text:     #e8eaf6;
+      --muted:    #6b7280;
+      --mono:     'DM Mono', monospace;
+      --sans:     'Syne', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Noise texture overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 999;
+    }
+
+    /* ── Glowing orb backgrounds ── */
+    .orb {
+      position: fixed; border-radius: 50%;
+      filter: blur(120px); pointer-events: none; z-index: 0;
+    }
+    .orb-1 { width: 600px; height: 600px; background: rgba(91,106,245,.12); top:-200px; left:-200px; }
+    .orb-2 { width: 500px; height: 500px; background: rgba(167,139,250,.08); bottom:-100px; right:-100px; }
+    .orb-3 { width: 300px; height: 300px; background: rgba(52,211,153,.06); top:40%; left:60%; }
+
+    /* ── Layout ── */
+    .wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Header ── */
+    header {
+      padding: 36px 0 28px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px; display: grid; place-items: center; font-size: 18px;
+    }
+    .logo span { color: var(--accent2); }
+    .badge {
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+      border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px;
+    }
+
+    /* ── Hero section ── */
+    .hero { padding: 64px 0 48px; text-align: center; }
+    .hero h1 {
+      font-size: clamp(38px, 5vw, 68px); font-weight: 800;
+      line-height: 1.05; letter-spacing: -2px;
+      background: linear-gradient(135deg, #fff 40%, var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      margin-top: 16px; font-size: 17px; color: var(--muted);
+      font-family: var(--mono); font-weight: 300;
+    }
+
+    /* ── Search bar ── */
+    .search-container {
+      max-width: 680px; margin: 48px auto 0;
+    }
+    .search-row {
+      display: flex; gap: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .search-row:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(91,106,245,.15), 0 0 30px rgba(91,106,245,.08);
+    }
+    #seedInput {
+      flex: 1; background: transparent; border: none; outline: none;
+      padding: 18px 20px; font-size: 16px; font-family: var(--sans);
+      color: var(--text); letter-spacing: -0.2px;
+    }
+    #seedInput::placeholder { color: var(--muted); }
+    .options-row {
+      display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;
+    }
+    .opt-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
+    .opt-group label { font-size: 11px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; letter-spacing: 1px; }
+    .opt-group select, .opt-group input[type=number] {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 12px; border-radius: 8px; font-family: var(--mono); font-size: 13px;
+      outline: none; transition: border-color .2s;
+    }
+    .opt-group select:focus, .opt-group input:focus { border-color: var(--accent); }
+
+    #searchBtn {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; color: #fff; padding: 18px 28px;
+      font-family: var(--sans); font-size: 15px; font-weight: 700;
+      cursor: pointer; letter-spacing: -0.3px;
+      transition: opacity .15s, transform .1s;
+    }
+    #searchBtn:hover { opacity: .9; }
+    #searchBtn:active { transform: scale(.98); }
+    #searchBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* ── Loader ── */
+    .loader { display: none; text-align: center; padding: 60px 0; }
+    .loader.active { display: block; }
+    .spinner {
+      width: 48px; height: 48px; margin: 0 auto 20px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader p { font-family: var(--mono); color: var(--muted); font-size: 13px; }
+    .loader-steps { margin-top: 8px; font-size: 12px; }
+    #stepText { color: var(--accent2); }
+
+    /* ── Error ── */
+    .error-box {
+      display: none; background: rgba(248,113,113,.08);
+      border: 1px solid rgba(248,113,113,.25);
+      border-radius: 12px; padding: 16px 20px;
+      color: var(--red); font-family: var(--mono); font-size: 13px;
+      margin-top: 24px;
+    }
+    .error-box.active { display: block; }
+
+    /* ── Results ── */
+    #results { display: none; padding-bottom: 80px; }
+    #results.active { display: block; animation: fadeUp .4s ease both; }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform:none; } }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      margin: 40px 0 32px; padding: 20px 24px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    }
+    .stat { display: flex; flex-direction: column; gap: 2px; }
+    .stat-val { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+    .stat-lbl { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+    .divider { width: 1px; background: var(--border); }
+
+    /* ── Intent distribution bar ── */
+    .intent-bar-wrap { flex: 1; min-width: 200px; }
+    .intent-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; margin-top: 8px; }
+    .intent-seg { height: 100%; border-radius: 2px; transition: width .6s ease; }
+    .intent-seg.informational { background: var(--accent); }
+    .intent-seg.transactional { background: var(--green); }
+    .intent-seg.commercial    { background: var(--yellow); }
+    .intent-seg.navigational  { background: var(--pink); }
+    .intent-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* ── Section title ── */
+    .section-title {
+      font-size: 13px; font-family: var(--mono); text-transform: uppercase;
+      letter-spacing: 2px; color: var(--muted); margin-bottom: 16px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Two-column layout ── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media(max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Keyword table ── */
+    .kw-table-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+    }
+    .kw-table-header {
+      display: grid; grid-template-columns: 1fr 120px 80px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .kw-row {
+      display: grid; grid-template-columns: 1fr 120px 80px;
+      padding: 11px 20px; border-bottom: 1px solid rgba(30,33,48,.6);
+      align-items: center;
+      transition: background .15s;
+      animation: fadeIn .3s ease both;
+    }
+    .kw-row:last-child { border-bottom: none; }
+    .kw-row:hover { background: rgba(91,106,245,.04); }
+    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+    .kw-text { font-size: 14px; font-family: var(--mono); }
+    .kw-intent {
+      font-size: 11px; font-family: var(--mono); font-weight: 500;
+      padding: 3px 10px; border-radius: 20px; text-align: center;
+      letter-spacing: 0.5px; text-transform: uppercase; width: fit-content;
+    }
+    .intent-informational { background: rgba(91,106,245,.15); color: #818cf8; }
+    .intent-transactional { background: rgba(52,211,153,.12); color: var(--green); }
+    .intent-commercial    { background: rgba(251,191,36,.1);  color: var(--yellow); }
+    .intent-navigational  { background: rgba(244,114,182,.1); color: var(--pink); }
+
+    /* ── Difficulty bar ── */
+    .diff-wrap { display: flex; align-items: center; gap: 8px; }
+    .diff-bar { height: 4px; flex: 1; background: var(--border); border-radius: 2px; overflow: hidden; }
+    .diff-fill { height: 100%; border-radius: 2px; }
+    .diff-low  { background: var(--green); }
+    .diff-mid  { background: var(--yellow); }
+    .diff-high { background: var(--red); }
+    .diff-num  { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 28px; }
+
+    /* ── Clusters ── */
+    .clusters-wrap { display: flex; flex-direction: column; gap: 16px; }
+    .cluster-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+      animation: fadeUp .35s ease both;
+    }
+    .cluster-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none;
+      transition: background .15s;
+    }
+    .cluster-header:hover { background: rgba(91,106,245,.05); }
+    .cluster-id {
+      display: flex; align-items: center; gap: 10px;
+      font-family: var(--mono); font-size: 13px; font-weight: 500;
+    }
+    .cluster-num {
+      width: 26px; height: 26px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 700; color: #fff;
+    }
+    .cluster-count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .cluster-toggle { color: var(--muted); font-size: 18px; transition: transform .2s; }
+    .cluster-toggle.open { transform: rotate(180deg); }
+    .cluster-body { padding: 14px 18px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .cluster-kw {
+      font-family: var(--mono); font-size: 12px;
+      background: rgba(91,106,245,.08); border: 1px solid rgba(91,106,245,.2);
+      color: var(--text); padding: 4px 12px; border-radius: 20px;
+      transition: background .15s;
+    }
+    .cluster-kw:hover { background: rgba(91,106,245,.18); }
+
+    /* ── Filter row ── */
+    .filter-row {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .filter-btn {
+      font-family: var(--mono); font-size: 12px; padding: 6px 14px;
+      border-radius: 20px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer;
+      transition: all .15s;
+    }
+    .filter-btn:hover, .filter-btn.active {
+      border-color: var(--accent); color: var(--text);
+      background: rgba(91,106,245,.1);
+    }
+
+    /* ── Copy button ── */
+    .copy-btn {
+      font-family: var(--mono); font-size: 11px; padding: 6px 14px;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--muted); cursor: pointer;
+      transition: all .15s; margin-left: auto;
+    }
+    .copy-btn:hover { border-color: var(--green); color: var(--green); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="wrap">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🔬</div>
+        Key<span>Lens</span>
+      </div>
+      <div class="badge">NLP · SentenceTransformers · KMeans</div>
+    </header>
+
+    <div class="hero">
+      <h1>Keyword Research<br/>Powered by NLP</h1>
+      <p>Enter a seed keyword → get clusters, intent, and difficulty scores instantly</p>
+    </div>
+
+    <div class="search-container">
+      <div class="search-row">
+        <input id="seedInput" type="text" placeholder="e.g. python machine learning, running shoes, coffee maker…" />
+        <button id="searchBtn" onclick="runResearch()">Analyse →</button>
+      </div>
+      <div class="options-row">
+        <div class="opt-group">
+          <label>Keywords</label>
+          <input id="topN" type="number" value="25" min="5" max="100"/>
+        </div>
+        <div class="opt-group">
+          <label>Clusters (auto)</label>
+          <input id="nClusters" type="number" placeholder="auto" min="2" max="10"/>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+    <div class="loader" id="loader">
+      <div class="spinner"></div>
+      <p>Running NLP pipeline…</p>
+      <p class="loader-steps"><span id="stepText">Loading models</span></p>
+    </div>
+
+    <div id="results">
+      <div class="stats-bar" id="statsBar"></div>
+
+      <div class="grid-2">
+        <!-- Keywords panel -->
+        <div>
+          <div class="section-title">Keywords</div>
+          <div class="filter-row" id="filterRow">
+            <button class="filter-btn active" data-intent="all" onclick="filterByIntent('all', this)">All</button>
+            <button class="filter-btn" data-intent="informational" onclick="filterByIntent('informational', this)">Informational</button>
+            <button class="filter-btn" data-intent="transactional" onclick="filterByIntent('transactional', this)">Transactional</button>
+            <button class="filter-btn" data-intent="commercial" onclick="filterByIntent('commercial', this)">Commercial</button>
+            <button class="filter-btn" data-intent="navigational" onclick="filterByIntent('navigational', this)">Navigational</button>
+            <button class="copy-btn" id="copyBtn" onclick="copyKeywords()">Copy all</button>
+          </div>
+          <div class="kw-table-wrap">
+            <div class="kw-table-header">
+              <span>Keyword</span><span>Intent</span><span>Difficulty</span>
+            </div>
+            <div id="kwList"></div>
+          </div>
+        </div>
+
+        <!-- Clusters panel -->
+        <div>
+          <div class="section-title">Semantic Clusters</div>
+          <div class="clusters-wrap" id="clusterList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allKeywords = [];
+    let currentFilter = 'all';
+
+    const steps = [
+      'Loading models…',
+      'Generating keyword ideas…',
+      'Computing embeddings…',
+      'Clustering with KMeans…',
+      'Classifying intent…',
+      'Scoring difficulty…',
+      'Building response…',
+    ];
+    let stepIdx = 0, stepTimer = null;
+
+    function startSteps() {
+      stepIdx = 0;
+      document.getElementById('stepText').textContent = steps[0];
+      stepTimer = setInterval(() => {
+        stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+        document.getElementById('stepText').textContent = steps[stepIdx];
+      }, 2200);
+    }
+    function stopSteps() { clearInterval(stepTimer); }
+
+    async function runResearch() {
+      const seed = document.getElementById('seedInput').value.trim();
+      if (!seed) return;
+
+      const top_n = parseInt(document.getElementById('topN').value) || 25;
+      const nClustersVal = document.getElementById('nClusters').value;
+      const n_clusters = nClustersVal ? parseInt(nClustersVal) : null;
+
+      document.getElementById('errorBox').classList.remove('active');
+      document.getElementById('results').classList.remove('active');
+      document.getElementById('loader').classList.add('active');
+      document.getElementById('searchBtn').disabled = true;
+      startSteps();
+
+      try {
+        const res = await fetch('/api/keyword-research/', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({seed_keyword: seed, top_n, n_clusters}),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || JSON.stringify(data.errors));
+        renderResults(data);
+      } catch (err) {
+        document.getElementById('errorBox').textContent = '⚠ ' + err.message;
+        document.getElementById('errorBox').classList.add('active');
+      } finally {
+        stopSteps();
+        document.getElementById('loader').classList.remove('active');
+        document.getElementById('searchBtn').disabled = false;
+      }
+    }
+
+    document.getElementById('seedInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') runResearch();
+    });
+
+    function renderResults(data) {
+      allKeywords = data.keywords;
+      currentFilter = 'all';
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.querySelector('[data-intent="all"]').classList.add('active');
+
+      renderStats(data);
+      renderKeywords(allKeywords);
+      renderClusters(data.clusters);
+      document.getElementById('results').classList.add('active');
+      document.getElementById('results').scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
+    function renderStats(data) {
+      const dist = data.intent_distribution;
+      const total = data.total_keywords;
+      const colors = {informational:'#818cf8',transactional:'#34d399',commercial:'#fbbf24',navigational:'#f472b6'};
+
+      let segs = Object.entries(dist).map(([k,v]) =>
+        `<div class="intent-seg ${k}" style="width:${total?((v/total)*100).toFixed(1):0}%"></div>`
+      ).join('');
+
+      let legends = Object.entries(dist).map(([k,v]) =>
+        `<div class="legend-item"><div class="legend-dot" style="background:${colors[k]}"></div>${k}: ${v}</div>`
+      ).join('');
+
+      document.getElementById('statsBar').innerHTML = `
+        <div class="stat"><div class="stat-val" style="color:var(--accent)">${total}</div><div class="stat-lbl">Keywords</div></div>
+        <div class="divider"></div>
+        <div class="stat"><div class="stat-val" style="color:var(--accent2)">${data.total_clusters}</div><div class="stat-lbl">Clusters</div></div>
+        <div class="divider"></div>
+        <div class="stat intent-bar-wrap">
+          <div class="stat-lbl">Intent Distribution</div>
+          <div class="intent-bar">${segs}</div>
+          <div class="intent-legend">${legends}</div>
+        </div>
+      `;
+    }
+
+    function renderKeywords(keywords) {
+      const list = document.getElementById('kwList');
+      if (!keywords.length) { list.innerHTML = '<div style="padding:20px;color:var(--muted);font-family:var(--mono);font-size:13px">No keywords match this filter.</div>'; return; }
+
+      list.innerHTML = keywords.map((k, i) => {
+        const d = k.difficulty_score;
+        const cls = d < 40 ? 'diff-low' : d < 65 ? 'diff-mid' : 'diff-high';
+        return `
+          <div class="kw-row" style="animation-delay:${i*18}ms">
+            <div class="kw-text">${k.keyword}</div>
+            <div><span class="kw-intent intent-${k.intent}">${k.intent}</span></div>
+            <div class="diff-wrap">
+              <div class="diff-bar"><div class="diff-fill ${cls}" style="width:${d}%"></div></div>
+              <div class="diff-num">${d}</div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function filterByIntent(intent, btn) {
+      currentFilter = intent;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filtered = intent === 'all' ? allKeywords : allKeywords.filter(k => k.intent === intent);
+      renderKeywords(filtered);
+    }
+
+    function renderClusters(clusters) {
+      const wrap = document.getElementById('clusterList');
+      const palette = ['#5b6af5','#a78bfa','#34d399','#fbbf24','#f472b6','#60a5fa','#fb923c','#a3e635'];
+      wrap.innerHTML = Object.entries(clusters).map(([id, kws], i) => `
+        <div class="cluster-card" style="animation-delay:${i*60}ms">
+          <div class="cluster-header" onclick="toggleCluster(this)">
+            <div class="cluster-id">
+              <div class="cluster-num" style="background:linear-gradient(135deg,${palette[i%palette.length]},${palette[(i+1)%palette.length]})">${parseInt(id)+1}</div>
+              Cluster ${parseInt(id)+1}
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="cluster-count">${kws.length} keywords</span>
+              <span class="cluster-toggle">▾</span>
+            </div>
+          </div>
+          <div class="cluster-body">
+            ${kws.map(k => `<span class="cluster-kw">${k}</span>`).join('')}
+          </div>
+        </div>`).join('');
+    }
+
+    function toggleCluster(header) {
+      const body = header.nextElementSibling;
+      const tog = header.querySelector('.cluster-toggle');
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : 'flex';
+      tog.classList.toggle('open', !open);
+    }
+
+    function copyKeywords() {
+      const text = allKeywords.map(k => k.keyword).join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById('copyBtn');
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy all'; btn.classList.remove('copied'); }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

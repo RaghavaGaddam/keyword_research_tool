@@ -1,0 +1,18 @@
+# Core Django
+django>=4.2,<5.0
+djangorestframework>=3.14
+django-cors-headers>=4.3
+
+# NLP - keyword generation
+keybert>=0.8.0
+sentence-transformers>=2.2.0
+
+# NLP - clustering & vectorization
+scikit-learn>=1.3
+numpy>=1.24
+
+# Google Trends integration (optional)
+pytrends>=4.9
+
+# Utilities
+python-dotenv>=1.0
